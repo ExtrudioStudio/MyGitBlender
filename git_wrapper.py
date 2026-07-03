@@ -1,0 +1,59 @@
+import subprocess
+from pathlib import Path
+
+_CREATION_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _run(args, cwd):
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        creationflags=_CREATION_FLAGS,
+    )
+
+
+def ensure_repo(mirror_path: Path, remote_url: str) -> tuple[bool, str]:
+    git_dir = mirror_path / ".git"
+    if git_dir.exists():
+        result = _run(["remote", "set-url", "origin", remote_url], mirror_path)
+        return result.returncode == 0, result.stderr
+
+    mirror_path.mkdir(parents=True, exist_ok=True)
+    result = _run(["clone", remote_url, "."], mirror_path)
+    if result.returncode == 0:
+        return True, result.stdout
+
+    # Fall back to a fresh local repo if the remote couldn't be cloned
+    # (e.g. it genuinely has no commits yet for some git hosts).
+    result = _run(["init"], mirror_path)
+    if result.returncode != 0:
+        return False, result.stderr
+    result = _run(["remote", "add", "origin", remote_url], mirror_path)
+    return result.returncode == 0, result.stderr
+
+
+def commit_all(mirror_path: Path, message: str) -> tuple[bool, str]:
+    _run(["add", "-A"], mirror_path)
+    result = _run(["commit", "-m", message], mirror_path)
+    if result.returncode != 0:
+        if "nothing to commit" in result.stdout.lower():
+            return False, "nothing to commit"
+        return False, result.stderr
+    return True, result.stdout
+
+
+def push(mirror_path: Path) -> tuple[bool, str]:
+    result = _run(["push", "-u", "origin", "HEAD"], mirror_path)
+    return result.returncode == 0, (result.stdout + result.stderr)
+
+
+def pull(mirror_path: Path) -> tuple[bool, str]:
+    result = _run(["pull", "--ff-only"], mirror_path)
+    return result.returncode == 0, (result.stdout + result.stderr)
+
+
+def log(mirror_path: Path, count: int = 30) -> tuple[bool, str]:
+    result = _run(["log", f"-n{count}", "--format=%H|%ci|%s"], mirror_path)
+    return result.returncode == 0, result.stdout

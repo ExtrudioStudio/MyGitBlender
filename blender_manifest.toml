@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id            = "mygitblender"
+version       = "0.1.0"
+name          = "MyGitBlender"
+tagline       = "Sync hotkeys, theme, and preferences to a GitHub repo"
+maintainer    = "Extrudio Studio <extrudio.studio@gmail.com>"
+type          = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-2.0-or-later"]
+tags    = ["Interface", "Pipeline"]
+
+[permissions]
+files = "Read/write Blender config files (keymaps, theme, prefs)"
+network = "Push/pull config to/from a GitHub repository via git"
