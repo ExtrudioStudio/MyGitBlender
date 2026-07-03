@@ -4,6 +4,7 @@ from . import config_paths
 from . import conflict
 from . import git_wrapper
 from . import sync_addons
+from . import sync_binary
 from . import sync_keymap
 from . import sync_theme
 from . import version_tag
@@ -45,6 +46,10 @@ class MYGITBLENDER_OT_push(bpy.types.Operator):
         if prefs.sync_addons:
             sync_addons.write_addons_manifest(mirror_dir, sync_addons.collect_installed_addons())
             changed.append("addon list")
+        if prefs.sync_startup and sync_binary.export_startup(mirror_dir):
+            changed.append("startup file")
+        if prefs.sync_preferences and sync_binary.export_preferences(mirror_dir):
+            changed.append("preferences")
 
         if not changed:
             self.report({'WARNING'}, "Nothing selected to sync - check a category first")
@@ -152,6 +157,13 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
             if remote_addons:
                 missing = sync_addons.diff_missing_addons(remote_addons)
 
+        restart_needed = []
+        if prefs.sync_startup and sync_binary.import_startup(mirror_dir):
+            restart_needed.append("startup file")
+        if prefs.sync_preferences and sync_binary.import_preferences(mirror_dir):
+            restart_needed.append("preferences")
+        applied.extend(restart_needed)
+
         if applied:
             msg = f"Applied: {', '.join(applied)}"
         else:
@@ -162,7 +174,10 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
             more = f" (+{len(missing) - 5} more)" if len(missing) > 5 else ""
             msg += f". Missing add-ons: {names}{more} - see addons.md in the mirror"
 
-        self.report({'WARNING'} if missing else {'INFO'}, msg)
+        if restart_needed:
+            msg += f". Restart Blender NOW to apply {', '.join(restart_needed)} - don't save preferences before restarting"
+
+        self.report({'WARNING'} if (missing or restart_needed) else {'INFO'}, msg)
         return {'FINISHED'}
 
 
@@ -203,6 +218,11 @@ class MYGITBLENDER_OT_checkout_snapshot(bpy.types.Operator):
             if prefs.sync_theme and theme_file.exists():
                 sync_theme.import_theme(theme_file)
                 applied.append("theme")
+
+            if prefs.sync_startup and sync_binary.import_startup(scratch_dir):
+                applied.append("startup file (restart to apply)")
+            if prefs.sync_preferences and sync_binary.import_preferences(scratch_dir):
+                applied.append("preferences (restart to apply)")
         finally:
             git_wrapper.remove_worktree(mirror_dir, scratch_dir)
 
@@ -252,12 +272,42 @@ class MYGITBLENDER_OT_browse_history(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class MYGITBLENDER_OT_first_time_setup(bpy.types.Operator):
+    bl_idname = "mygitblender.first_time_setup"
+    bl_label = "First-Time Setup (New Machine)"
+    bl_description = "New machine? Enter your repo URL and pull every checked category in one go"
+
+    repo_url: bpy.props.StringProperty(
+        name="GitHub Repo URL",
+        description="HTTPS URL of your MyGitBlender sync repo",
+    )
+
+    def invoke(self, context, event):
+        self.repo_url = _get_prefs(context).repo_url
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "repo_url")
+
+    def execute(self, context):
+        if not self.repo_url.strip():
+            self.report({'ERROR'}, "Enter a GitHub Repo URL")
+            return {'CANCELLED'}
+
+        _get_prefs(context).repo_url = self.repo_url.strip()
+
+        # A fresh machine has no local config worth protecting, so skip
+        # straight to Pull's execute() - no need for the conflict pre-checks.
+        return bpy.ops.mygitblender.pull('EXEC_DEFAULT')
+
+
 classes = (
     MYGITBLENDER_OT_push,
     MYGITBLENDER_OT_pull,
     MYGITBLENDER_OT_checkout_snapshot,
     MYGITBLENDER_MT_history,
     MYGITBLENDER_OT_browse_history,
+    MYGITBLENDER_OT_first_time_setup,
 )
 
 

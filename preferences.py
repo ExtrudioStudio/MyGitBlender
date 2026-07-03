@@ -31,16 +31,15 @@ class MyGitBlenderPreferences(bpy.types.AddonPreferences):
         box.prop(self, "sync_keymap")
         box.prop(self, "sync_theme")
         box.prop(self, "sync_addons")
-
-        coming_later = box.column()
-        coming_later.enabled = False
-        coming_later.prop(self, "sync_startup", text="Start-Up File (coming in a later stage)")
-        coming_later.prop(self, "sync_preferences", text="General Preferences (coming in a later stage)")
+        box.prop(self, "sync_startup", text="Start-Up File (needs restart to apply)")
+        box.prop(self, "sync_preferences", text="General Preferences (needs restart to apply)")
 
         row = layout.row(align=True)
         row.operator("mygitblender.push", icon='EXPORT')
         row.operator("mygitblender.pull", icon='IMPORT')
         row.operator("mygitblender.browse_history", icon='RECOVER_LAST')
+
+        layout.operator("mygitblender.first_time_setup", icon='IMPORT')
 
 
 classes = (

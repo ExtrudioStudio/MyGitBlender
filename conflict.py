@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from . import git_wrapper
+from . import sync_binary
 from . import sync_keymap
 from . import sync_theme
 
@@ -34,5 +35,13 @@ def local_unsynced_categories(mirror_dir: Path, prefs) -> list[str]:
             tmp.unlink(missing_ok=True)
             if differs:
                 changed.append("theme")
+
+    if prefs.sync_startup and (mirror_dir / sync_binary.STARTUP_FILENAME).exists():
+        if sync_binary.has_changed(mirror_dir, sync_binary.STARTUP_FILENAME):
+            changed.append("startup file")
+
+    if prefs.sync_preferences and (mirror_dir / sync_binary.USERPREF_FILENAME).exists():
+        if sync_binary.has_changed(mirror_dir, sync_binary.USERPREF_FILENAME):
+            changed.append("preferences")
 
     return changed
