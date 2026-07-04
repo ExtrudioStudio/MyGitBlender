@@ -102,6 +102,39 @@ def git_available() -> bool:
     return shutil.which("git") is not None
 
 
+def launch_git_installer() -> tuple[bool, str]:
+    """Kick off a real git install for the user. Returns (launched, mode):
+    mode is "console" when an installer window was opened (Windows winget /
+    macOS Xcode CLT), or "browser" when there's no safe unattended option
+    and the caller should open the download page instead. Never blocks -
+    both installers can take well over a minute."""
+    import platform
+    import shutil
+
+    system = platform.system()
+
+    if system == "Windows":
+        winget = shutil.which("winget")
+        if winget:
+            subprocess.Popen(
+                [winget, "install", "--id", "Git.Git", "-e", "--source", "winget",
+                 "--accept-package-agreements", "--accept-source-agreements"],
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            return True, "console"
+        return False, "browser"
+
+    if system == "Darwin":
+        # Triggers macOS's own "Install Command Line Developer Tools" dialog
+        # (includes git); Apple handles the whole flow, no sudo needed here.
+        subprocess.Popen(["xcode-select", "--install"])
+        return True, "console"
+
+    # Linux package managers all need an interactively-typed sudo password,
+    # which can't be driven safely from inside Blender.
+    return False, "browser"
+
+
 def commit_all(mirror_path: Path, message: str) -> tuple[bool, str]:
     _run(["add", "-A"], mirror_path)
     result = _run(["commit", "-m", message], mirror_path)

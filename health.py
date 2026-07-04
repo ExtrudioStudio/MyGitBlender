@@ -9,17 +9,17 @@ def _get_prefs(context):
 
 
 def run_checks(context):
-    """Returns (results, identity_missing) where results is a list of
-    (ok, label, hint) tuples."""
+    """Returns (results, identity_missing, git_missing) where results is a
+    list of (ok, label, hint) tuples."""
     prefs = _get_prefs(context)
     results = []
     identity_missing = False
 
     if not git_wrapper.git_available():
         results.append((False, "Git is not installed",
-                        "Install it from git-scm.com, or install GitHub Desktop"))
+                        "Use the Install Git button below"))
         # Every other check needs the git executable - stop here.
-        return results, identity_missing
+        return results, identity_missing, True
     results.append((True, "Git is installed", ""))
 
     name, email = git_wrapper.get_identity(config_paths.get_mirror_dir())
@@ -34,7 +34,7 @@ def run_checks(context):
     if not repo_url:
         results.append((False, "No repo URL set",
                         "Paste your GitHub repo URL in the field above"))
-        return results, identity_missing
+        return results, identity_missing, False
     results.append((True, "Repo URL is set", ""))
 
     ok, err = git_wrapper.check_remote(repo_url, timeout=10.0)
@@ -43,7 +43,7 @@ def run_checks(context):
     else:
         results.append((False, "Can't reach the repo", err))
 
-    return results, identity_missing
+    return results, identity_missing, False
 
 
 class MYGITBLENDER_OT_health_check(bpy.types.Operator):
@@ -55,7 +55,7 @@ class MYGITBLENDER_OT_health_check(bpy.types.Operator):
     )
 
     def execute(self, context):
-        results, identity_missing = run_checks(context)
+        results, identity_missing, git_missing = run_checks(context)
         problems = sum(1 for ok, _, _ in results if not ok)
 
         def draw(menu, _context):
@@ -64,6 +64,10 @@ class MYGITBLENDER_OT_health_check(bpy.types.Operator):
                 col.label(text=label, icon='CHECKMARK' if ok else 'CANCEL')
                 if hint:
                     col.label(text=f"      {hint}")
+            if git_missing:
+                col.separator()
+                col.operator_context = 'INVOKE_DEFAULT'
+                col.operator("mygitblender.install_git", icon='IMPORT')
             if identity_missing:
                 col.separator()
                 col.operator_context = 'INVOKE_DEFAULT'
@@ -79,6 +83,34 @@ class MYGITBLENDER_OT_health_check(bpy.types.Operator):
             self.report({'INFO'}, "Health check: everything looks good")
         else:
             self.report({'WARNING'}, f"Health check: {problems} issue(s) found - see popup")
+        return {'FINISHED'}
+
+
+class MYGITBLENDER_OT_install_git(bpy.types.Operator):
+    bl_idname = "mygitblender.install_git"
+    bl_label = "Install Git"
+    bl_description = (
+        "Install git for you (via Windows winget or macOS's developer tools "
+        "installer). You may see a system prompt to approve it"
+    )
+
+    def execute(self, context):
+        launched, mode = git_wrapper.launch_git_installer()
+
+        if launched:
+            self.report(
+                {'INFO'},
+                "Installing git - approve any system prompt that appears, "
+                "then run Setup Health Check again when it's done",
+            )
+            return {'FINISHED'}
+
+        import webbrowser
+        webbrowser.open("https://git-scm.com/downloads")
+        self.report(
+            {'INFO'},
+            "Opened the git download page - run the installer, then Setup Health Check again",
+        )
         return {'FINISHED'}
 
 
@@ -122,6 +154,7 @@ class MYGITBLENDER_OT_set_git_identity(bpy.types.Operator):
 
 classes = (
     MYGITBLENDER_OT_health_check,
+    MYGITBLENDER_OT_install_git,
     MYGITBLENDER_OT_set_git_identity,
 )
 
