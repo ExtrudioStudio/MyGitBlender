@@ -24,7 +24,7 @@ Works with Blender 4.2 and up. Built and tested on 5.1.
 
 **Automatic backups.** Before every Pull (or snapshot restore), your current config gets backed up locally first. If something looks wrong afterward, hit Undo Last Pull and you're back to where you were.
 
-**A Setup Health Check.** One button checks that git is installed, your identity is set, and your repo is reachable. If anything's wrong, it tells you exactly what and how to fix it.
+**A Setup Health Check.** One button checks that git is installed, your identity is set, and your repo is reachable. If anything's wrong, it tells you exactly what and how to fix it. If git itself is missing, there's an Install Git button right there too, it uses Windows's built in installer (winget) or macOS's developer tools installer, so you don't have to go find and run anything yourself.
 
 **Plain language errors.** No raw git output dumped in your face. Common problems like being offline, a bad sign in, or a wrong URL get explained in normal English. Git also can't hang Blender waiting on a password prompt that will never come.
 
