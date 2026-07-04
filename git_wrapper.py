@@ -49,8 +49,9 @@ def push(mirror_path: Path) -> tuple[bool, str]:
     return result.returncode == 0, (result.stdout + result.stderr)
 
 
-def pull(mirror_path: Path) -> tuple[bool, str]:
-    result = _run(["pull", "--ff-only"], mirror_path)
+def merge_ff(mirror_path: Path) -> tuple[bool, str]:
+    """Fast-forward to the already-fetched upstream. Local-only, no network."""
+    result = _run(["merge", "--ff-only", "@{u}"], mirror_path)
     return result.returncode == 0, (result.stdout + result.stderr)
 
 

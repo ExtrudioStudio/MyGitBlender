@@ -1,6 +1,8 @@
 import bpy
 
 from . import config_paths
+from . import operators
+from . import version_tag
 
 
 class MyGitBlenderPreferences(bpy.types.AddonPreferences):
@@ -18,10 +20,20 @@ class MyGitBlenderPreferences(bpy.types.AddonPreferences):
     sync_startup: bpy.props.BoolProperty(name="Start-Up File", default=False)
     sync_preferences: bpy.props.BoolProperty(name="General Preferences", default=False)
 
+    remind_unsynced: bpy.props.BoolProperty(
+        name="Remind me about unsynced changes",
+        description="Show a reminder popup when your config has changed but hasn't been pushed",
+        default=True,
+    )
+
     def draw(self, context):
         layout = self.layout
 
         layout.prop(self, "repo_url")
+
+        status = version_tag.get_status_text()
+        row = layout.row()
+        row.label(text=status or "No syncs yet - Push to get started", icon='INFO')
 
         row = layout.row()
         row.label(text=f"Local mirror: {config_paths.get_mirror_dir()}")
@@ -34,10 +46,20 @@ class MyGitBlenderPreferences(bpy.types.AddonPreferences):
         box.prop(self, "sync_startup", text="Start-Up File (needs restart to apply)")
         box.prop(self, "sync_preferences", text="General Preferences (needs restart to apply)")
 
+        layout.prop(self, "remind_unsynced")
+
         row = layout.row(align=True)
         row.operator("mygitblender.push", icon='EXPORT')
         row.operator("mygitblender.pull", icon='IMPORT')
         row.operator("mygitblender.browse_history", icon='RECOVER_LAST')
+
+        missing = operators.get_cached_installable_missing()
+        if missing:
+            layout.operator(
+                "mygitblender.install_missing",
+                text=f"Install {len(missing)} Missing Add-on(s)",
+                icon='IMPORT',
+            )
 
         layout.operator("mygitblender.first_time_setup", icon='IMPORT')
 
