@@ -2,6 +2,7 @@ import threading
 
 import bpy
 
+from . import backup
 from . import config_paths
 from . import conflict
 from . import git_wrapper
@@ -47,6 +48,16 @@ def _set_missing_cache(context, missing):
     global _last_missing, _last_missing_installable
     _last_missing = missing
     _last_missing_installable = _installable_subset(context, missing)
+
+
+def _ensure_repo_with_identity(prefs, mirror_dir):
+    """ensure_repo + re-apply the stored mirror-local git identity (a fresh
+    clone starts without one, and we never touch the global git config)."""
+    ok, msg = git_wrapper.ensure_repo(mirror_dir, prefs.repo_url.strip())
+    if ok and prefs.git_user_name.strip() and prefs.git_user_email.strip():
+        git_wrapper.set_local_identity(
+            mirror_dir, prefs.git_user_name.strip(), prefs.git_user_email.strip())
+    return ok, msg
 
 
 class _Worker(threading.Thread):
@@ -102,9 +113,9 @@ class MYGITBLENDER_OT_push(bpy.types.Operator):
             return None, ('ERROR', "Set a GitHub Repo URL in the add-on preferences first"), None
 
         mirror_dir = config_paths.get_mirror_dir()
-        ok, msg = git_wrapper.ensure_repo(mirror_dir, repo_url)
+        ok, msg = _ensure_repo_with_identity(prefs, mirror_dir)
         if not ok:
-            return None, ('ERROR', f"Git setup failed: {msg}"), None
+            return None, ('ERROR', git_wrapper.humanize_git_error(msg)), None
 
         changed = []
         if prefs.sync_keymap:
@@ -136,11 +147,11 @@ class MYGITBLENDER_OT_push(bpy.types.Operator):
 
         committed, res = git_wrapper.commit_all(mirror_dir, commit_msg)
         if not committed and res != "nothing to commit":
-            return 'error', f"Commit failed: {res}"
+            return 'error', git_wrapper.humanize_git_error(res)
 
         ok, out = git_wrapper.push(mirror_dir)
         if not ok:
-            return 'error', f"Push failed: {out}"
+            return 'error', git_wrapper.humanize_git_error(out)
         return 'ok', committed
 
     def _report_result(self, status, payload):
@@ -221,9 +232,9 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
 
         mirror_dir = config_paths.get_mirror_dir()
         first_time = not (mirror_dir / ".git").exists()
-        ok, msg = git_wrapper.ensure_repo(mirror_dir, repo_url)
+        ok, msg = _ensure_repo_with_identity(prefs, mirror_dir)
         if not ok:
-            self.report({'ERROR'}, f"Git setup failed: {msg}")
+            self.report({'ERROR'}, git_wrapper.humanize_git_error(msg))
             return {'CANCELLED'}
 
         # A fresh clone is already up to date and has no local state worth
@@ -246,7 +257,7 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
             return {'CANCELLED'}
         ok, out = self._worker.result
         if not ok:
-            self.report({'ERROR'}, f"Fetch failed: {out}")
+            self.report({'ERROR'}, git_wrapper.humanize_git_error(out))
             return {'CANCELLED'}
 
         prefs = _get_prefs(context)
@@ -281,14 +292,22 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
             return {'CANCELLED'}
 
         mirror_dir = config_paths.get_mirror_dir()
-        ok, msg = git_wrapper.ensure_repo(mirror_dir, repo_url)
+        ok, msg = _ensure_repo_with_identity(prefs, mirror_dir)
         if not ok:
-            self.report({'ERROR'}, f"Git setup failed: {msg}")
+            self.report({'ERROR'}, git_wrapper.humanize_git_error(msg))
             return {'CANCELLED'}
 
         ok, out = git_wrapper.merge_ff(mirror_dir)
         if not ok:
-            self.report({'ERROR'}, f"Pull failed: {out}")
+            self.report({'ERROR'}, git_wrapper.humanize_git_error(out))
+            return {'CANCELLED'}
+
+        # Safety net: snapshot the current live config so this Pull can be
+        # undone. If the backup can't be taken, don't touch anything.
+        try:
+            backup.make_backup(prefs)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Pull aborted - couldn't back up current config: {ex}")
             return {'CANCELLED'}
 
         applied = []
@@ -490,6 +509,12 @@ class MYGITBLENDER_OT_checkout_snapshot(bpy.types.Operator):
         mirror_dir = config_paths.get_mirror_dir()
         scratch_dir = mirror_dir.parent / "scratch_checkout"
 
+        try:
+            backup.make_backup(prefs)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Restore aborted - couldn't back up current config: {ex}")
+            return {'CANCELLED'}
+
         ok, msg = git_wrapper.checkout_worktree_at(mirror_dir, self.commit_sha, scratch_dir)
         if not ok:
             self.report({'ERROR'}, f"Could not check out snapshot: {msg}")
@@ -518,6 +543,47 @@ class MYGITBLENDER_OT_checkout_snapshot(bpy.types.Operator):
             self.report({'INFO'}, f"Restored from snapshot: {', '.join(applied)}")
         else:
             self.report({'WARNING'}, "Nothing to restore from that snapshot")
+        return {'FINISHED'}
+
+
+class MYGITBLENDER_OT_undo_pull(bpy.types.Operator):
+    bl_idname = "mygitblender.undo_pull"
+    bl_label = "Undo Last Pull"
+    bl_description = "Restore your config exactly as it was right before the last Pull or snapshot restore"
+
+    def invoke(self, context, event):
+        latest = backup.latest_backup()
+        if latest is None:
+            self.report({'INFO'}, "No backup to restore yet")
+            return {'CANCELLED'}
+        _, info = latest
+        taken = info.get("taken_at", "")[:16].replace("T", " ")
+        return context.window_manager.invoke_confirm(
+            self, event,
+            title="Undo Last Pull",
+            message=f"Restore your config from the backup taken {taken} (UTC)?",
+            confirm_text="Restore",
+        )
+
+    def execute(self, context):
+        latest = backup.latest_backup()
+        if latest is None:
+            self.report({'INFO'}, "No backup to restore yet")
+            return {'CANCELLED'}
+
+        backup_dir, _info = latest
+        applied, restart_needed = backup.restore(backup_dir)
+        if not applied:
+            self.report({'WARNING'}, "Backup was empty - nothing restored")
+            return {'CANCELLED'}
+
+        msg = f"Restored: {', '.join(applied)}"
+        if restart_needed:
+            msg += (
+                f". Restart Blender NOW to apply {', '.join(restart_needed)}"
+                f" - don't save preferences before restarting"
+            )
+        self.report({'WARNING'} if restart_needed else {'INFO'}, msg)
         return {'FINISHED'}
 
 
@@ -593,6 +659,7 @@ classes = (
     MYGITBLENDER_OT_push,
     MYGITBLENDER_OT_pull,
     MYGITBLENDER_OT_install_missing,
+    MYGITBLENDER_OT_undo_pull,
     MYGITBLENDER_OT_checkout_snapshot,
     MYGITBLENDER_MT_history,
     MYGITBLENDER_OT_browse_history,

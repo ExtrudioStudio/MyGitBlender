@@ -15,6 +15,9 @@ Compatible with **Blender 4.2+** (tested on 5.1).
 - **Add-on manifest** — `addons.json` + `addons.md` record every installed add-on; missing official extensions can be **reinstalled with one click** on a new machine
 - **Push reminder** — optional popup when your config changed but wasn't pushed
 - **First-Time Setup** — one dialog on a fresh machine: paste your repo URL, everything gets pulled
+- **Setup Health Check** — one click verifies git is installed, your identity is set, and the repo is reachable, with fix-it guidance for each problem
+- **Automatic safety backup + Undo Last Pull** — your current config is snapshotted before every Pull or snapshot restore; one click puts everything back
+- **Friendly errors** — no raw git output; common problems (offline, sign-in, wrong URL) are explained in plain language, and git can never freeze Blender waiting for a password
 
 ## Install
 
@@ -38,4 +41,6 @@ Compatible with **Blender 4.2+** (tested on 5.1).
 | `conflict.py` | Remote-diverged and local-unsynced-changes detection |
 | `version_tag.py` | Sync metadata (`sync_manifest.json`), commit messages, panel status text |
 | `reminder.py` | Periodic unsynced-changes reminder popup |
+| `health.py` | Setup Health Check + Set Git Identity operators |
+| `backup.py` | Pre-Pull safety backups and Undo Last Pull restore |
 | `blender_manifest.toml` | Extension metadata |

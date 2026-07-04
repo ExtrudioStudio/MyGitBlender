@@ -1,5 +1,6 @@
 import bpy
 
+from . import backup
 from . import config_paths
 from . import operators
 from . import version_tag
@@ -25,6 +26,11 @@ class MyGitBlenderPreferences(bpy.types.AddonPreferences):
         description="Show a reminder popup when your config has changed but hasn't been pushed",
         default=True,
     )
+
+    # Git author identity, applied mirror-locally (never global). Set via
+    # the Set Git Identity dialog in the Setup Health Check.
+    git_user_name: bpy.props.StringProperty(default="", options={'HIDDEN'})
+    git_user_email: bpy.props.StringProperty(default="", options={'HIDDEN'})
 
     def draw(self, context):
         layout = self.layout
@@ -61,7 +67,19 @@ class MyGitBlenderPreferences(bpy.types.AddonPreferences):
                 icon='IMPORT',
             )
 
-        layout.operator("mygitblender.first_time_setup", icon='IMPORT')
+        latest = backup.latest_backup()
+        if latest is not None:
+            _, info = latest
+            taken = info.get("taken_at", "")[:16].replace("T", " ")
+            layout.operator(
+                "mygitblender.undo_pull",
+                text=f"Undo Last Pull (backup from {taken} UTC)",
+                icon='LOOP_BACK',
+            )
+
+        row = layout.row(align=True)
+        row.operator("mygitblender.health_check", icon='CHECKMARK')
+        row.operator("mygitblender.first_time_setup", icon='IMPORT')
 
 
 classes = (
