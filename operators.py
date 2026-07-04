@@ -327,13 +327,41 @@ class MYGITBLENDER_OT_pull(bpy.types.Operator):
             more = f" (+{len(missing) - 5} more)" if len(missing) > 5 else ""
             msg += f". Missing add-ons: {names}{more}"
             if _last_missing_installable:
-                msg += f" - {len(_last_missing_installable)} can be reinstalled from the add-on panel"
+                msg += " - see popup"
+                manual_only = [e for e in missing if e not in _last_missing_installable]
+                _show_install_confirm_popup(context, _last_missing_installable, manual_only)
 
         if restart_needed:
             msg += f". Restart Blender NOW to apply {', '.join(restart_needed)} - don't save preferences before restarting"
 
         self.report({'WARNING'} if (missing or restart_needed) else {'INFO'}, msg)
         return {'FINISHED'}
+
+
+def _show_install_confirm_popup(context, installable, manual_only):
+    wm = context.window_manager
+    if not wm or not wm.windows:
+        return
+
+    def draw(menu, _context):
+        col = menu.layout.column()
+        col.label(text=f"{len(installable)} missing add-on(s) can be reinstalled:")
+        for entry in installable[:10]:
+            col.label(text=entry["name"], icon='PLUGIN')
+        if len(installable) > 10:
+            col.label(text=f"...and {len(installable) - 10} more")
+        if manual_only:
+            col.separator()
+            col.label(text=f"{len(manual_only)} other(s) need manual install - see addons.md")
+        col.separator()
+        col.operator_context = 'INVOKE_DEFAULT'
+        col.operator(
+            "mygitblender.install_missing",
+            text=f"Install All ({len(installable)})",
+            icon='IMPORT',
+        )
+
+    wm.popup_menu(draw, title="Missing add-ons found", icon='QUESTION')
 
 
 def _show_pull_warning_popup(context, warnings):
