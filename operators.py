@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 import bpy
 
@@ -15,9 +16,8 @@ from . import version_tag
 # Only one git job at a time; the reminder timer also checks this.
 _busy = False
 
-# Missing add-ons found by the last Pull. The "installable" subset is what
-# the panel's Install Missing Add-ons button offers to reinstall.
-_last_missing = []
+# Missing add-ons found by the last Pull that can be reinstalled from an
+# online repo - what the Install Missing Add-ons button offers.
 _last_missing_installable = []
 
 
@@ -45,8 +45,7 @@ def _installable_subset(context, missing):
 
 
 def _set_missing_cache(context, missing):
-    global _last_missing, _last_missing_installable
-    _last_missing = missing
+    global _last_missing_installable
     _last_missing_installable = _installable_subset(context, missing)
 
 
@@ -411,7 +410,8 @@ class MYGITBLENDER_OT_install_missing(bpy.types.Operator):
         extensions.package_install returns FINISHED even when the package id
         is unknown (it only prints to the console), so the return value can't
         be trusted - check the package directory instead."""
-        from pathlib import Path
+        if repo is None:
+            return False
 
         pkg_id = entry["module"].split(".")[-1]
         try:
@@ -460,7 +460,7 @@ class MYGITBLENDER_OT_install_missing(bpy.types.Operator):
 
         download_failed = []
         for entry in to_download:
-            if self._try_install(repos[entry["repo"]], entry):
+            if self._try_install(repos.get(entry["repo"]), entry):
                 installed.append(entry["name"])
             else:
                 download_failed.append(entry)
@@ -473,7 +473,7 @@ class MYGITBLENDER_OT_install_missing(bpy.types.Operator):
             except Exception:
                 pass
             for entry in download_failed:
-                if self._try_install(repos[entry["repo"]], entry):
+                if self._try_install(repos.get(entry["repo"]), entry):
                     installed.append(entry["name"])
                 else:
                     failed.append(entry)
@@ -491,7 +491,7 @@ class MYGITBLENDER_OT_install_missing(bpy.types.Operator):
 class MYGITBLENDER_OT_checkout_snapshot(bpy.types.Operator):
     bl_idname = "mygitblender.checkout_snapshot"
     bl_label = "Restore This Snapshot"
-    bl_description = "Apply the keymap/theme from this historical sync, without changing your git history"
+    bl_description = "Apply the checked categories from this historical sync, without changing your git history"
 
     commit_sha: bpy.props.StringProperty()
     commit_label: bpy.props.StringProperty()

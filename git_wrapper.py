@@ -1,4 +1,6 @@
 import os
+import platform
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -34,6 +36,9 @@ _ERROR_PATTERNS = (
      "The repo has newer changes from another machine - Pull first"),
     (("author identity unknown", "unable to auto-detect email address", "empty ident name"),
      "Git needs your name/email - run Setup Health Check to set it"),
+    (("no upstream", "not something we can merge", "unknown revision",
+      "couldn't find remote ref"),
+     "The repo looks empty - Push from your other machine first"),
 )
 
 
@@ -98,7 +103,6 @@ def check_remote(remote_url: str, timeout: float = 15.0) -> tuple[bool, str]:
 
 
 def git_available() -> bool:
-    import shutil
     return shutil.which("git") is not None
 
 
@@ -108,9 +112,6 @@ def launch_git_installer() -> tuple[bool, str]:
     macOS Xcode CLT), or "browser" when there's no safe unattended option
     and the caller should open the download page instead. Never blocks -
     both installers can take well over a minute."""
-    import platform
-    import shutil
-
     system = platform.system()
 
     if system == "Windows":

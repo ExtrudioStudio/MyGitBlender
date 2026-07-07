@@ -1,14 +1,8 @@
 from pathlib import Path
 
-from . import git_wrapper
 from . import sync_binary
 from . import sync_keymap
 from . import sync_theme
-
-
-def remote_has_diverged(mirror_dir: Path) -> bool:
-    git_wrapper.fetch(mirror_dir)
-    return git_wrapper.remote_ahead_count(mirror_dir) > 0
 
 
 def local_unsynced_categories(mirror_dir: Path, prefs) -> list[str]:

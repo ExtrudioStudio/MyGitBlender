@@ -148,7 +148,7 @@ class MYGITBLENDER_OT_set_git_identity(bpy.types.Operator):
             git_wrapper.set_local_identity(mirror_dir, name, email)
             self.report({'INFO'}, f"Git identity set: {name} <{email}>")
         else:
-            self.report({'INFO'}, f"Saved - will be applied when the sync repo is created")
+            self.report({'INFO'}, "Saved - will be applied when the sync repo is created")
         return {'FINISHED'}
 
 

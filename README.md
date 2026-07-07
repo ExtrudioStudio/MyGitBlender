@@ -64,6 +64,10 @@ Works with Blender 4.2 and up. Built and tested on 5.1.
 | `conflict.py` | Detects a diverged remote or unsaved local changes |
 | `version_tag.py` | Sync metadata (`sync_manifest.json`), commit messages, and the panel's status text |
 | `reminder.py` | The periodic reminder popup for unsynced changes |
-| `health.py` | Setup Health Check and Set Git Identity |
+| `health.py` | Setup Health Check, Set Git Identity, and Install Git |
 | `backup.py` | Pre-Pull safety backups and the Undo Last Pull restore |
 | `blender_manifest.toml` | Extension metadata |
+
+## License
+
+GPL-2.0-or-later, same as Blender itself. See the LICENSE file.
